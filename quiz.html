@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        .quiz-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .quiz-container h2 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .question {
+            margin-bottom: 20px;
+            position: relative;
+            display: none; /* Hide all questions initially */
+        }
+        .question.active {
+            display: block; /* Show only active question */
+        }
+        .question p {
+            font-weight: bold;
+        }
+        .question label {
+            display: block;
+            margin: 5px 0;
+        }
+        .submit-button {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .submit-button button {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .submit-button button:hover {
+            background-color: #218838;
+        }
+        .cancel-button {
+            position: fixed;
+            width: 150px;
+            padding: 10px;
+            background-color: #d6858d;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+            margin-top: 1.5px;
+        }
+        .cancel-button:hover {
+            background-color: #c82333;
+        }
+        #dateTime {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-family: sans-serif;
+        }
+        .timer {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background-color: #f8d7da;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 0.8em;
+        }
+        .navigation {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        .nav-button {
+            padding: 8px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .nav-button:hover {
+            background-color: #0069d9;
+        }
+        .nav-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <a href="{{ url_for('user_dashboard') }}" class="cancel-button">CANCEL QUIZ</a>
+
+    <p>
+        <p><span id="dateTime"></span></p>
+        
+        <script>
+         function updateDateTime() {
+          const now = new Date();
+          const dateTimeString = now.toLocaleString(); 
+          document.getElementById("dateTime").textContent = dateTimeString;
+        }
+        
+        updateDateTime();
+        
+        setInterval(updateDateTime, 1000); </script>
+        </p>
+    <div class="quiz-container">
+        <h2>Quiz Questions</h2>
+        <form action="{{ url_for('submit_quiz') }}" method="POST" onsubmit="return validateQuiz()">
+            <input type="hidden" name="question_type" value="{{ questions[0][1] }}">
+            {% for question in questions %}
+                <div class="question" id="question_{{ question[0] }}">
+                    <div class="timer" id="timer_{{ question[0] }}">15s</div>
+                    <p>{{ loop.index }}. {{ question[2] }}</p>
+                    <label>
+                        <input type="radio" name="question_{{ question[0] }}" value="1" onchange="handleAnswer({{ loop.index }})"> {{ question[3] }}
+                    </label>
+                    <label>
+                        <input type="radio" name="question_{{ question[0] }}" value="2" onchange="handleAnswer({{ loop.index }})"> {{ question[4] }}
+                    </label>
+                    <label>
+                        <input type="radio" name="question_{{ question[0] }}" value="3" onchange="handleAnswer({{ loop.index }})"> {{ question[5] }}
+                    </label>
+                    <label>
+                        <input type="radio" name="question_{{ question[0] }}" value="4" onchange="handleAnswer({{ loop.index }})"> {{ question[6] }}
+                    </label>
+                </div>
+            {% endfor %}
+            <div class="navigation">
+                <button type="button" class="nav-button" id="prevBtn" disabled>Previous</button>
+                <button type="button" class="nav-button" id="nextBtn">Next</button>
+            </div>
+            <div class="submit-button">
+                <button type="submit">Submit Quiz</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        let currentQuestion = 1;
+        const totalQuestions = {{ questions|length }};
+        let timers = {};
+        let answeredQuestions = new Set();
+
+        function validateQuiz() {
+            if (answeredQuestions.size !== totalQuestions) {
+                alert(`Please answer all questions before submitting. You have ${totalQuestions - answeredQuestions.size} unanswered questions.`);
+                return false;
+            }
+            return true;
+        }
+
+        function showQuestion(index) {
+            // Hide all questions
+            document.querySelectorAll('.question').forEach(q => {
+                q.classList.remove('active');
+            });
+            
+            // Show current question
+            document.querySelector(`.question:nth-child(${index + 1})`).classList.add('active');
+            
+            // Update navigation buttons
+            document.getElementById('prevBtn').disabled = index === 1;
+            document.getElementById('nextBtn').disabled = index === totalQuestions;
+            
+            // Start timer for this question if not already started and not answered
+            const questionId = document.querySelector(`.question:nth-child(${index + 1})`).id.split('_')[1];
+            if (!timers[questionId] && !answeredQuestions.has(index)) {
+                startTimer(questionId);
+            }
+        }
+
+        function startTimer(questionId) {
+            const timerElement = document.getElementById(`timer_${questionId}`);
+            let timeLeft = 15;
+            timerElement.textContent = `${timeLeft}s`;
+            timerElement.style.backgroundColor = "#f8d7da";
+            
+            timers[questionId] = setInterval(() => {
+                timeLeft--;
+                timerElement.textContent = `${timeLeft}s`;
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timers[questionId]);
+                    timerElement.textContent = "Time's up!";
+                    timerElement.style.backgroundColor = "#f5c6cb";
+                    alert(`Time's up for question ${currentQuestion}!`);
+                    answeredQuestions.add(currentQuestion);
+                    moveToNextQuestion();
+                }
+            }, 1000);
+        }
+
+        function handleAnswer(questionNumber) {
+            answeredQuestions.add(questionNumber);
+            const questionId = document.querySelector(`.question:nth-child(${questionNumber + 1})`).id.split('_')[1];
+            if (timers[questionId]) {
+                clearInterval(timers[questionId]);
+                document.getElementById(`timer_${questionId}`).textContent = "Answered";
+                document.getElementById(`timer_${questionId}`).style.backgroundColor = "#d4edda";
+            }
+            moveToNextQuestion();
+        }
+
+        function moveToNextQuestion() {
+            if (currentQuestion < totalQuestions) {
+                currentQuestion++;
+                showQuestion(currentQuestion);
+            }
+        }
+
+        function moveToPrevQuestion() {
+            if (currentQuestion > 1) {
+                currentQuestion--;
+                showQuestion(currentQuestion);
+            }
+        }
+
+        // Initialize the quiz
+        document.addEventListener('DOMContentLoaded', function() {
+            // Show first question
+            showQuestion(1);
+            
+            // Set up navigation buttons
+            document.getElementById('prevBtn').addEventListener('click', moveToPrevQuestion);
+            document.getElementById('nextBtn').addEventListener('click', moveToNextQuestion);
+        });
+    </script>
+</body>
+</html>
